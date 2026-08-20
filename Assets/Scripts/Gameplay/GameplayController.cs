@@ -28,12 +28,19 @@ namespace CandyBeltSort
 
         public void EnsureArena()
         {
-            if (_arena != null) return;
-            var go = new GameObject("FactoryArena");
-            go.transform.SetParent(transform, false);
-            _arena = go.AddComponent<FactoryArena>();
-            _input = gameObject.AddComponent<TapInput>();
-            _input.OnCandyTapped = HandleTap;
+            if (_arena == null)
+            {
+                var go = new GameObject("FactoryArena");
+                go.transform.SetParent(transform, false);
+                _arena = go.AddComponent<FactoryArena>();
+            }
+
+            if (_input == null)
+            {
+                _input = gameObject.GetComponent<TapInput>();
+                if (_input == null) _input = gameObject.AddComponent<TapInput>();
+                _input.OnCandyTapped = HandleTap;
+            }
         }
 
         public void StartLevel(int index)
@@ -45,7 +52,7 @@ namespace CandyBeltSort
             _arena.Build(world);
             _arena.Belt.Setup(Level);
             LevelSequencer.Build(Level, _boxQueue, _spawns);
-            _arena.Rack.Build(_arena.transform.GetChild(0), Level, _boxQueue);
+            _arena.Rack.Build(Level, _boxQueue);
             _input.SetCamera(_arena.Cam);
             _spawnIndex = 0;
             _spawnTimer = 0.35f;
@@ -163,8 +170,8 @@ namespace CandyBeltSort
             var from = candy.transform.position;
             var to = _arena.Rack.SlotWorld(box);
             yield return Tweens.Arc(candy.transform, from, to, 1.4f, 0.28f);
-            if (candy != null) Destroy(candy.gameObject);
-
+            if (candy == null || box == null) yield break;
+            Destroy(candy.gameObject);
             box.AddOne();
             Sfx.Box();
             StartCoroutine(Tweens.PunchScale(box.transform, 0.12f, 0.18f));

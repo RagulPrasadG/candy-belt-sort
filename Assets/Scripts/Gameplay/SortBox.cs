@@ -35,7 +35,7 @@ namespace CandyBeltSort
 
             _lid = MeshFactory.Primitive(PrimitiveType.Cube, "Lid", transform, new Vector3(0f, 0.72f, -0.05f), new Vector3(1.18f, 0.06f, 0.92f), Palette.Hex("A1887F")).transform;
             _lid.GetComponent<Collider>().enabled = false;
-            _lid.gameObject.SetActive(false);
+            if (_lid != null) _lid.gameObject.SetActive(false);
 
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(transform, false);
@@ -58,7 +58,7 @@ namespace CandyBeltSort
             Fill = 0;
             Locked = false;
             Active = true;
-            _lid.gameObject.SetActive(false);
+            if (_lid != null) _lid.gameObject.SetActive(false);
             ApplyColor();
             RefreshLabel();
         }
@@ -78,7 +78,7 @@ namespace CandyBeltSort
 
         public void Seal()
         {
-            _lid.gameObject.SetActive(true);
+            if (_lid != null) _lid.gameObject.SetActive(true);
             Active = false;
         }
 
@@ -87,7 +87,7 @@ namespace CandyBeltSort
             Fill = 0;
             Active = true;
             Locked = false;
-            _lid.gameObject.SetActive(false);
+            if (_lid != null) _lid.gameObject.SetActive(false);
             RefreshLabel();
         }
 

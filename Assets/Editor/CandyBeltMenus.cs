@@ -25,6 +25,15 @@ namespace CandyBeltSort
                 EditorUtility.DisplayDialog("Candy Belt Sort", message, "OK");
         }
 
+        [MenuItem("Candy Belt Sort/Validate Levels")]
+        public static void ValidateLevels()
+        {
+            var result = LevelCatalog.ValidateAll();
+            Debug.Log("[CandyBelt] " + result);
+            if (!Application.isBatchMode)
+                EditorUtility.DisplayDialog("Candy Belt Sort", result, "OK");
+        }
+
         [MenuItem("Candy Belt Sort/Unlock All Levels (Play Mode Save)")]
         public static void UnlockAll()
         {

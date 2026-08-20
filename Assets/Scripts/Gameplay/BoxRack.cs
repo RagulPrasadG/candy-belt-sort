@@ -8,15 +8,13 @@ namespace CandyBeltSort
         readonly List<SortBox> _slots = new List<SortBox>();
         readonly Queue<CandyColor> _queue = new Queue<CandyColor>();
         int _lockedRemaining;
-        Transform _parent;
         LevelDefinition _level;
 
         public int Completed { get; private set; }
         public int Quota { get; private set; }
 
-        public void Build(Transform parent, LevelDefinition level, IList<CandyColor> boxQueue)
+        public void Build(LevelDefinition level, IList<CandyColor> boxQueue)
         {
-            _parent = parent;
             _level = level;
             foreach (var s in _slots)
             {
@@ -31,14 +29,14 @@ namespace CandyBeltSort
             foreach (var c in boxQueue)
                 _queue.Enqueue(c);
 
-            int slots = level.OpenSlots;
+            int slots = Mathf.Max(1, level.OpenSlots);
             for (int i = 0; i < slots; i++)
                 CreateSlot();
 
             Layout();
             AssignWaitingSlots();
 
-            if (_lockedRemaining > 0)
+            if (_lockedRemaining > 0 && _slots.Count > 0)
                 _slots[_slots.Count - 1].SetLocked(true);
         }
 
@@ -54,7 +52,7 @@ namespace CandyBeltSort
         {
             for (int i = 0; i < _slots.Count; i++)
             {
-                if (_slots[i].CanAccept(color))
+                if (_slots[i] != null && _slots[i].CanAccept(color))
                     return _slots[i];
             }
             return null;
@@ -62,13 +60,14 @@ namespace CandyBeltSort
 
         public void NotifyFilled(SortBox box)
         {
+            if (box == null) return;
             box.Seal();
             Completed++;
             if (_lockedRemaining > 0)
             {
                 foreach (var slot in _slots)
                 {
-                    if (!slot.Locked) continue;
+                    if (slot == null || !slot.Locked) continue;
                     slot.SetLocked(false);
                     _lockedRemaining--;
                     break;
@@ -84,25 +83,42 @@ namespace CandyBeltSort
         {
             var go = new GameObject($"Box_{_slots.Count}");
             var box = go.AddComponent<SortBox>();
-            box.Build(_parent, Vector3.zero, _level.BoxCapacity);
+            box.Build(transform, Vector3.zero, _level.BoxCapacity);
             box.Active = false;
             _slots.Add(box);
         }
 
         void Layout()
         {
-            int slots = _slots.Count;
-            float spacing = slots >= 4 ? 1.35f : 1.55f;
-            float startX = -((slots - 1) * spacing) * 0.5f;
-            for (int i = 0; i < slots; i++)
-                _slots[i].transform.position = new Vector3(startX + i * spacing, 0f, -2.35f);
+            int n = _slots.Count;
+            for (int i = 0; i < n; i++)
+            {
+                if (_slots[i] == null) continue;
+                Vector3 pos;
+                if (n <= 2)
+                    pos = new Vector3(i == 0 ? -2.45f : 2.45f, 0f, 1.15f);
+                else if (n == 3)
+                {
+                    if (i == 0) pos = new Vector3(-2.55f, 0f, 1.85f);
+                    else if (i == 1) pos = new Vector3(2.55f, 0f, 1.85f);
+                    else pos = new Vector3(0f, 0f, -0.45f);
+                }
+                else
+                {
+                    float x = (i % 2 == 0) ? -2.55f : 2.55f;
+                    float z = i < 2 ? 2.15f : 0.35f;
+                    pos = new Vector3(x, 0f, z);
+                }
+
+                _slots[i].transform.localPosition = pos;
+            }
         }
 
         void AssignWaitingSlots()
         {
             foreach (var slot in _slots)
             {
-                if (slot.Active) continue;
+                if (slot == null || slot.Active) continue;
                 if (_queue.Count == 0) return;
                 slot.ResetEmpty();
                 slot.SetColor(_queue.Dequeue());

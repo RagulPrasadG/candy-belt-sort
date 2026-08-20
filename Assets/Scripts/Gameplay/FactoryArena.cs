@@ -9,6 +9,7 @@ namespace CandyBeltSort
         public BoxRack Rack { get; private set; }
         public Camera Cam { get; private set; }
         public Transform CandyRoot { get; private set; }
+        public Transform ArenaRoot { get; private set; }
 
         MeshRenderer _floor;
         MeshRenderer _wall;
@@ -33,6 +34,7 @@ namespace CandyBeltSort
             var rackGo = new GameObject("BoxRack");
             rackGo.transform.SetParent(root.transform, false);
             Rack = rackGo.AddComponent<BoxRack>();
+            ArenaRoot = root.transform;
 
             BuildLights(root.transform);
             BuildCamera(root.transform, world);
@@ -79,6 +81,7 @@ namespace CandyBeltSort
         {
             foreach (var existing in FindObjectsByType<Light>(FindObjectsSortMode.None))
             {
+                if (existing.gameObject.scene.name == "DontDestroyOnLoad") continue;
                 if (existing.transform.root != transform)
                     existing.enabled = false;
             }
@@ -106,21 +109,23 @@ namespace CandyBeltSort
         {
             foreach (var existing in FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
-                if (existing.GetComponent<AudioListener>() != null)
-                    Destroy(existing.GetComponent<AudioListener>());
+                if (existing.cameraType != CameraType.Game) continue;
+                if (existing.transform.IsChildOf(transform)) continue;
+                var listener = existing.GetComponent<AudioListener>();
+                if (listener != null) Destroy(listener);
                 existing.enabled = false;
             }
 
             var camGo = new GameObject("GameCamera");
             camGo.transform.SetParent(parent, false);
-            camGo.transform.position = new Vector3(0f, 9.6f, -8.4f);
-            camGo.transform.rotation = Quaternion.Euler(48f, 0f, 0f);
+            camGo.transform.position = new Vector3(0f, 10.8f, -7.6f);
+            camGo.transform.LookAt(new Vector3(0f, 0.35f, 2.1f));
             Cam = camGo.AddComponent<Camera>();
             var additional = Cam.GetUniversalAdditionalCameraData();
             additional.renderPostProcessing = false;
             Cam.clearFlags = CameraClearFlags.SolidColor;
             Cam.backgroundColor = Color.Lerp(world.Wall, Color.white, 0.25f);
-            Cam.fieldOfView = 48f;
+            Cam.fieldOfView = 50f;
             Cam.nearClipPlane = 0.1f;
             Cam.farClipPlane = 60f;
             camGo.AddComponent<AudioListener>();
@@ -129,8 +134,17 @@ namespace CandyBeltSort
 
         void Clear()
         {
-            for (int i = transform.childCount - 1; i >= 0; i--)
-                Destroy(transform.GetChild(i).gameObject);
+            if (ArenaRoot != null)
+            {
+                ArenaRoot.SetParent(null, true);
+                Destroy(ArenaRoot.gameObject);
+                ArenaRoot = null;
+            }
+
+            Belt = null;
+            Rack = null;
+            Cam = null;
+            CandyRoot = null;
         }
     }
 }

@@ -12,6 +12,9 @@ namespace CandyBeltSort
         Text _streak;
         readonly System.Collections.Generic.List<LevelDot> _dots = new System.Collections.Generic.List<LevelDot>();
 
+        const float CardHeight = 440f;
+        const float CardGap = 24f;
+
         struct LevelDot
         {
             public Button Button;
@@ -38,43 +41,58 @@ namespace CandyBeltSort
             _streak.rectTransform.anchorMin = new Vector2(0.5f, 0.82f);
             _streak.rectTransform.anchorMax = new Vector2(0.96f, 0.88f);
 
+            UiKit.Button(_canvas.transform, "Play", "PLAY", Palette.Good, PlayNext, new Vector2(0.08f, 0.70f), new Vector2(0.92f, 0.81f));
+
+            var how = UiKit.Label(_canvas.transform, "How", "Tap PLAY, then tap candy that matches a box.\nFill 3 to seal it. Don't let pieces fall off the belt.", 32, Palette.Ink, TextAnchor.MiddleCenter);
+            how.rectTransform.anchorMin = new Vector2(0.06f, 0.60f);
+            how.rectTransform.anchorMax = new Vector2(0.94f, 0.70f);
+
             UiKit.Button(_canvas.transform, "Settings", "Settings", Palette.Hex("8D6E63"), () => SettingsView.I.Show(), new Vector2(0.7f, 0.015f), new Vector2(0.97f, 0.07f));
 
+            BuildLevelScroll();
+        }
+
+        void BuildLevelScroll()
+        {
             var scrollGo = new GameObject("Scroll");
             scrollGo.transform.SetParent(_canvas.transform, false);
             var scrollRt = scrollGo.AddComponent<RectTransform>();
             scrollRt.anchorMin = new Vector2(0.04f, 0.09f);
-            scrollRt.anchorMax = new Vector2(0.96f, 0.81f);
+            scrollRt.anchorMax = new Vector2(0.96f, 0.59f);
             scrollRt.offsetMin = Vector2.zero;
             scrollRt.offsetMax = Vector2.zero;
+
             var scroll = scrollGo.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Elastic;
+            scroll.scrollSensitivity = 40f;
 
-            var viewport = UiKit.Panel(scrollGo.transform, "Viewport", Vector2.zero, Vector2.one, new Color(0, 0, 0, 0));
-            viewport.gameObject.AddComponent<Mask>().showMaskGraphic = false;
-            scroll.viewport = viewport.rectTransform;
+            var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+            viewport.transform.SetParent(scrollGo.transform, false);
+            var viewportRt = viewport.GetComponent<RectTransform>();
+            viewportRt.anchorMin = Vector2.zero;
+            viewportRt.anchorMax = Vector2.one;
+            viewportRt.offsetMin = Vector2.zero;
+            viewportRt.offsetMax = Vector2.zero;
+            var viewportImage = viewport.GetComponent<Image>();
+            viewportImage.color = new Color(1f, 1f, 1f, 0.04f);
+            viewportImage.raycastTarget = true;
+            scroll.viewport = viewportRt;
 
-            var content = new GameObject("Content");
+            var content = new GameObject("Content", typeof(RectTransform));
             content.transform.SetParent(viewport.transform, false);
-            var contentRt = content.AddComponent<RectTransform>();
+            var contentRt = content.GetComponent<RectTransform>();
             contentRt.anchorMin = new Vector2(0f, 1f);
             contentRt.anchorMax = new Vector2(1f, 1f);
             contentRt.pivot = new Vector2(0.5f, 1f);
-            contentRt.sizeDelta = new Vector2(0f, WorldCatalog.WorldCount * 520f);
-            var layout = content.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(8, 8, 8, 8);
-            layout.spacing = 24f;
-            layout.childForceExpandHeight = false;
-            layout.childForceExpandWidth = true;
-            layout.childControlHeight = true;
-            layout.childControlWidth = true;
-            content.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            float totalH = WorldCatalog.WorldCount * (CardHeight + CardGap) + 16f;
+            contentRt.sizeDelta = new Vector2(0f, totalH);
+            contentRt.anchoredPosition = Vector2.zero;
             scroll.content = contentRt;
 
             for (int w = 0; w < WorldCatalog.WorldCount; w++)
-                BuildWorldCard(content.transform, w);
+                BuildWorldCard(contentRt, w);
         }
 
         public void Show()
@@ -98,24 +116,26 @@ namespace CandyBeltSort
             }
         }
 
-        void BuildWorldCard(Transform parent, int worldIndex)
+        void BuildWorldCard(RectTransform parent, int worldIndex)
         {
             var world = WorldCatalog.Get(worldIndex);
-            var card = new GameObject($"World_{worldIndex}");
+            var card = new GameObject($"World_{worldIndex}", typeof(RectTransform), typeof(Image));
             card.transform.SetParent(parent, false);
-            var le = card.AddComponent<LayoutElement>();
-            le.minHeight = 480f;
-            le.preferredHeight = 480f;
-            var bg = card.AddComponent<Image>();
-            bg.color = Color.Lerp(world.Accent, Color.white, 0.55f);
+            var rt = card.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(0f, CardHeight);
+            rt.anchoredPosition = new Vector2(0f, -16f - worldIndex * (CardHeight + CardGap));
+            card.GetComponent<Image>().color = Color.Lerp(world.Accent, Color.white, 0.45f);
 
             var title = UiKit.Label(card.transform, "Name", world.Name, 48, Palette.Ink, TextAnchor.UpperLeft);
             title.rectTransform.anchorMin = new Vector2(0.04f, 0.78f);
-            title.rectTransform.anchorMax = new Vector2(0.96f, 0.98f);
+            title.rectTransform.anchorMax = new Vector2(0.96f, 0.96f);
 
             var tag = UiKit.Label(card.transform, "Tag", world.Tagline, 28, Palette.Ink, TextAnchor.UpperLeft);
-            tag.rectTransform.anchorMin = new Vector2(0.04f, 0.66f);
-            tag.rectTransform.anchorMax = new Vector2(0.96f, 0.8f);
+            tag.rectTransform.anchorMin = new Vector2(0.04f, 0.64f);
+            tag.rectTransform.anchorMax = new Vector2(0.96f, 0.78f);
 
             for (int i = 0; i < WorldCatalog.LevelsPerWorld; i++)
             {
@@ -123,12 +143,17 @@ namespace CandyBeltSort
                 int col = i % 6;
                 int row = i / 6;
                 float x0 = 0.04f + col * 0.16f;
-                float y1 = 0.58f - row * 0.28f;
-                var captured = levelIndex;
+                float y1 = 0.56f - row * 0.26f;
+                int captured = levelIndex;
                 var btn = UiKit.Button(card.transform, $"L{i}", (i + 1).ToString(), world.Accent, () => TryPlay(captured), new Vector2(x0, y1 - 0.22f), new Vector2(x0 + 0.14f, y1));
                 var image = btn.GetComponent<Image>();
                 _dots.Add(new LevelDot { Button = btn, Image = image, Index = levelIndex, Accent = world.Accent });
             }
+        }
+
+        void PlayNext()
+        {
+            TryPlay(ProgressSave.HighestUnlocked);
         }
 
         void TryPlay(int levelIndex)

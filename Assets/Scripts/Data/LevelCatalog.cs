@@ -67,5 +67,51 @@ namespace CandyBeltSort
                 Seed = 17031 + index * 97
             };
         }
+
+        public static string ValidateAll()
+        {
+            var boxes = new System.Collections.Generic.List<CandyColor>();
+            var candies = new System.Collections.Generic.List<SpawnSpec>();
+            int issues = 0;
+            var sb = new System.Text.StringBuilder();
+            if (Count != 120)
+            {
+                issues++;
+                sb.AppendLine($"Expected 120 levels, got {Count}");
+            }
+
+            for (int i = 0; i < Count; i++)
+            {
+                var level = Get(i);
+                if (level.OpenSlots < 2)
+                {
+                    issues++;
+                    sb.AppendLine($"L{i}: open slots {level.OpenSlots}");
+                }
+
+                if (level.QuotaBoxes < 1 || level.BoxCapacity < 1)
+                {
+                    issues++;
+                    sb.AppendLine($"L{i}: quota/capacity invalid");
+                }
+
+                LevelSequencer.Build(level, boxes, candies);
+                if (boxes.Count != level.QuotaBoxes)
+                {
+                    issues++;
+                    sb.AppendLine($"L{i}: box queue {boxes.Count} != quota {level.QuotaBoxes}");
+                }
+
+                if (candies.Count != level.QuotaBoxes * level.BoxCapacity)
+                {
+                    issues++;
+                    sb.AppendLine($"L{i}: candies {candies.Count} != {level.QuotaBoxes * level.BoxCapacity}");
+                }
+            }
+
+            return issues == 0
+                ? $"OK — {Count} levels, sequencer queues match quotas."
+                : $"{issues} issue(s)\n{sb}";
+        }
     }
 }

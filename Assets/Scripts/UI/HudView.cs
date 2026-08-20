@@ -30,6 +30,10 @@ namespace CandyBeltSort
             _undo = UiKit.Label(_canvas.transform, "UndoHint", "Free undos: 2", 28, Palette.Ink, TextAnchor.MiddleLeft);
             _undo.rectTransform.anchorMin = new Vector2(0.04f, 0.1f);
             _undo.rectTransform.anchorMax = new Vector2(0.6f, 0.15f);
+
+            var hint = UiKit.Label(_canvas.transform, "Hint", "Tap candy that matches a box", 34, Palette.Ink, TextAnchor.MiddleCenter);
+            hint.rectTransform.anchorMin = new Vector2(0.08f, 0.82f);
+            hint.rectTransform.anchorMax = new Vector2(0.92f, 0.89f);
         }
 
         public void Show(GameplayController game)

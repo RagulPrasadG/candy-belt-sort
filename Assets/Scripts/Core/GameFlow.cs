@@ -109,11 +109,20 @@ namespace CandyBeltSort
             if (FindFirstObjectByType<EventSystem>() != null) return;
             var go = new GameObject("EventSystem");
             go.AddComponent<EventSystem>();
+            try
+            {
 #if ENABLE_INPUT_SYSTEM
-            go.AddComponent<InputSystemUIInputModule>();
+                go.AddComponent<InputSystemUIInputModule>();
 #else
-            go.AddComponent<StandaloneInputModule>();
+                go.AddComponent<StandaloneInputModule>();
 #endif
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[CandyBelt] EventSystem module fallback: " + ex.Message);
+                if (go.GetComponent<StandaloneInputModule>() == null)
+                    go.AddComponent<StandaloneInputModule>();
+            }
         }
     }
 }
