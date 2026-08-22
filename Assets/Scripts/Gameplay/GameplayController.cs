@@ -21,6 +21,11 @@ namespace CandyBeltSort
         int _freeUndos = 2;
         bool _extraSlotUsed;
         bool _resolving;
+        int _busy;
+        float _deadlockTimer;
+
+        const float BombBlast = 1.35f;
+        const float DeadlockGrace = 0.7f;
 
         struct UndoRecord
         {
@@ -67,6 +72,8 @@ namespace CandyBeltSort
             _freeUndos = index < 8 ? 3 : 2;
             _extraSlotUsed = false;
             _resolving = false;
+            _busy = 0;
+            _deadlockTimer = 0f;
             Playing = true;
             _undos.Clear();
             HudView.I.Show(this);
@@ -100,10 +107,92 @@ namespace CandyBeltSort
                     if (fallen != null)
                     {
                         StartCoroutine(FailRoutine(fallen));
-                        break;
+                        return;
                     }
                 }
             }
+
+            DeadlockTick();
+        }
+
+        // Detects the soft-lock the belt can reach: every candy has spawned, nothing is in
+        // flight, and no legal move remains (fronts fit no open box and no empty slot exists).
+        // Instead of freezing, we resolve it as a fail so the player can retry or continue.
+        void DeadlockTick()
+        {
+            if (_busy > 0 || !SpawnsDone() || AnyPending())
+            {
+                _deadlockTimer = 0f;
+                return;
+            }
+
+            if (LegalMoveExists())
+            {
+                _deadlockTimer = 0f;
+                return;
+            }
+
+            _deadlockTimer += Time.deltaTime;
+            if (_deadlockTimer >= DeadlockGrace)
+            {
+                _deadlockTimer = 0f;
+                StartCoroutine(DeadlockRoutine());
+            }
+        }
+
+        bool SpawnsDone()
+        {
+            for (int i = 0; i < _laneQueues.Length; i++)
+            {
+                if (_laneSpawnAt[i] < _laneQueues[i].Count) return false;
+            }
+            return true;
+        }
+
+        // True while any candy is still emerging or in a collect/explode animation.
+        bool AnyPending()
+        {
+            if (_arena == null || _arena.Belts == null) return true;
+            foreach (var belt in _arena.Belts)
+            {
+                if (belt == null) continue;
+                foreach (var c in belt.Candies)
+                {
+                    if (c != null && (c.Emerging || c.Collecting)) return true;
+                }
+            }
+            return false;
+        }
+
+        bool LegalMoveExists()
+        {
+            if (_arena == null || _arena.Belts == null || _arena.Rack == null) return true;
+
+            bool anyFront = false;
+            for (int i = 0; i < _arena.Belts.Length; i++)
+            {
+                var front = _arena.Belts[i].FrontCandy();
+                if (front == null) continue;
+                anyFront = true;
+                // Bombs can always be cleared, hidden can be revealed, frozen will thaw/advance.
+                if (front.Bomb || front.Hidden || front.Frozen) return true;
+                if (_arena.Rack.TryMatching(front.Hue) != null) return true;
+            }
+
+            // Any empty unlocked slot can accept a fresh colour for a waiting front candy.
+            if (anyFront && _arena.Rack.HasEmptySlot()) return true;
+            return false;
+        }
+
+        IEnumerator DeadlockRoutine()
+        {
+            _resolving = true;
+            Playing = false;
+            ClearSelection();
+            Sfx.Fail();
+            Haptics.Light();
+            yield return new WaitForSeconds(0.35f);
+            GameFlow.I.HandleFail(Level.Index);
         }
 
         void SplitLaneQueues()
@@ -228,7 +317,7 @@ namespace CandyBeltSort
 
             if (candy.Bomb)
             {
-                StartCoroutine(DiscardBomb(candy));
+                StartCoroutine(ExplodeBomb(candy));
                 return;
             }
 
@@ -291,6 +380,19 @@ namespace CandyBeltSort
 
         IEnumerator Collect(CandyItem candy, SortBox box)
         {
+            _busy++;
+            try
+            {
+                yield return CollectRoutine(candy, box);
+            }
+            finally
+            {
+                _busy = Mathf.Max(0, _busy - 1);
+            }
+        }
+
+        IEnumerator CollectRoutine(CandyItem candy, SortBox box)
+        {
             candy.Collecting = true;
             if (_selected == candy) ClearSelection();
             var belt = BeltOf(candy);
@@ -332,18 +434,60 @@ namespace CandyBeltSort
             }
         }
 
-        IEnumerator DiscardBomb(CandyItem candy)
+        // Tapping a bomb detonates it: it clears every candy within the blast radius on its
+        // belt (a strategic way to bust a jam — but it will take out good candies too).
+        IEnumerator ExplodeBomb(CandyItem bomb)
         {
-            candy.Collecting = true;
-            if (_selected == candy) ClearSelection();
-            var belt = BeltOf(candy);
-            if (belt != null) belt.Remove(candy);
-            Sfx.Bomb();
-            Haptics.Light();
-            var from = candy.transform.position;
-            var to = from + new Vector3(2.4f, 0.6f, 0.2f);
-            yield return Tweens.Arc(candy.transform, from, to, 1.1f, 0.22f);
-            if (candy != null) Destroy(candy.gameObject);
+            _busy++;
+            try
+            {
+                bomb.Collecting = true;
+                if (_selected == bomb) ClearSelection();
+                int lane = bomb.Lane;
+                float at = bomb.Distance;
+                var center = bomb.transform.position;
+
+                var belt = _arena.BeltAt(lane);
+                if (belt != null) belt.Remove(bomb);
+
+                Sfx.Bomb();
+                Haptics.Light();
+                SpawnExplosion(center);
+                if (_arena.Cam != null)
+                    StartCoroutine(Tweens.Shake(_arena.Cam.transform, 0.14f, 0.24f));
+
+                var caught = new List<CandyItem>();
+                if (belt != null)
+                {
+                    foreach (var c in belt.Candies)
+                    {
+                        if (c == null || c == bomb || c.Collecting) continue;
+                        if (Mathf.Abs(c.Distance - at) <= BombBlast)
+                            caught.Add(c);
+                    }
+                }
+
+                if (bomb != null) Destroy(bomb.gameObject);
+
+                for (int i = 0; i < caught.Count; i++)
+                {
+                    var c = caught[i];
+                    if (c == null) continue;
+                    var pos = c.transform.position;
+                    var col = c.Bomb ? Palette.Bomb : Palette.Of(c.Hue);
+                    if (belt != null) belt.Remove(c);
+                    c.Collecting = true;
+                    SpawnPuff(pos + new Vector3(0f, 0.2f, 0.1f), col);
+                    Destroy(c.gameObject);
+                }
+
+                HudView.I.Refresh();
+                yield return new WaitForSeconds(0.06f);
+            }
+            finally
+            {
+                _busy = Mathf.Max(0, _busy - 1);
+            }
         }
 
         IEnumerator WinRoutine()
@@ -462,6 +606,42 @@ namespace CandyBeltSort
             shape.radius = 0.12f;
             ps.Play();
             Object.Destroy(go, 1.1f);
+        }
+
+        static void SpawnExplosion(Vector3 pos)
+        {
+            var go = new GameObject("BombBlast");
+            go.transform.position = pos + Vector3.up * 0.1f;
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = ps.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.6f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(3.5f, 7.5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.34f);
+            main.startColor = new ParticleSystem.MinMaxGradient(Palette.Hex("FFE082"), Palette.Hex("FF5252"));
+            main.maxParticles = 80;
+            main.gravityModifier = 0.6f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 48) });
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.18f;
+            var colorLife = ps.colorOverLifetime;
+            colorLife.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Palette.Hex("FF8A65"), 0.4f), new GradientColorKey(Palette.Hex("616161"), 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.9f, 0.5f), new GradientAlphaKey(0f, 1f) });
+            colorLife.color = gradient;
+            var sizeLife = ps.sizeOverLifetime;
+            sizeLife.enabled = true;
+            sizeLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.4f, 1f, 1.4f));
+            ps.Play();
+            Object.Destroy(go, 1.4f);
         }
 
         static void SpawnConfetti(Vector3 pos, Color color)
