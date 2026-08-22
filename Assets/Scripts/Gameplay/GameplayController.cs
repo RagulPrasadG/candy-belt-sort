@@ -495,7 +495,12 @@ namespace CandyBeltSort
             _resolving = true;
             Playing = false;
             Sfx.Win();
-            yield return new WaitForSeconds(0.45f);
+            SpawnConfetti(new Vector3(-2.2f, 3.6f, 2.4f), Palette.Pink);
+            SpawnConfetti(new Vector3(2.2f, 3.9f, 2.4f), Palette.Mint);
+            yield return new WaitForSeconds(0.18f);
+            SpawnConfetti(new Vector3(0f, 4.3f, 2.6f), Palette.Lemon);
+            SpawnConfetti(new Vector3(-0.8f, 3.4f, 2.2f), Palette.Blueberry);
+            yield return new WaitForSeconds(0.32f);
             GameFlow.I.HandleWin(Level.Index);
         }
 

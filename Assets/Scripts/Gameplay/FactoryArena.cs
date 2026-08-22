@@ -304,6 +304,18 @@ namespace CandyBeltSort
             MeshFactory.TexturedBlock("HopperTop", parent, new Vector3(0f, 2.85f, 8.3f), new Vector3(w * 0.5f, 0.35f, 0.8f), enamel, MeshFactory.Shade(accent, 1.1f), 0.42f, 1f, 1f);
             MeshFactory.Solid("Mouth", parent, new Vector3(0f, 0.62f, 7.38f), new Vector3(width * 0.78f, 0.62f, 0.22f), Palette.Hex("263238"), 0.05f);
             MeshFactory.Solid("Lip", parent, new Vector3(0f, 0.38f, 7.22f), new Vector3(width * 0.85f, 0.1f, 0.28f), Brass, 0.5f);
+
+            // A real chute opening the candies pop out of: a dark recessed throat framed by
+            // metal, with two hanging rubber flaps the candies push through as they emerge.
+            var chuteRubber = SpriteFactory.BeltTex();
+            MeshFactory.Solid("ChuteThroat", parent, new Vector3(0f, 0.62f, 7.66f), new Vector3(width * 0.7f, 0.66f, 0.55f), Palette.Hex("10151A"), 0.02f);
+            MeshFactory.TexturedSolid("ChuteRimTop", parent, new Vector3(0f, 0.99f, 7.42f), new Vector3(width * 0.92f, 0.14f, 0.34f), SpriteFactory.MetalTex(), Steel, 0.5f, 1f, 1f);
+            MeshFactory.Solid("ChuteRimL", parent, new Vector3(-(width * 0.45f), 0.62f, 7.42f), new Vector3(0.1f, 0.74f, 0.34f), Steel, 0.5f);
+            MeshFactory.Solid("ChuteRimR", parent, new Vector3(width * 0.45f, 0.62f, 7.42f), new Vector3(0.1f, 0.74f, 0.34f), Steel, 0.5f);
+            var flapL = MeshFactory.TexturedSolid("ChuteFlapL", parent, new Vector3(-width * 0.2f, 0.76f, 7.24f), new Vector3(width * 0.38f, 0.42f, 0.035f), chuteRubber, Palette.Hex("2E3A40"), 0.12f, 1f, 1f);
+            flapL.transform.localRotation = Quaternion.Euler(24f, 0f, -4f);
+            var flapR = MeshFactory.TexturedSolid("ChuteFlapR", parent, new Vector3(width * 0.2f, 0.76f, 7.24f), new Vector3(width * 0.38f, 0.42f, 0.035f), chuteRubber, Palette.Hex("2E3A40"), 0.12f, 1f, 1f);
+            flapR.transform.localRotation = Quaternion.Euler(24f, 0f, 4f);
             MeshFactory.Solid("Light", parent, new Vector3(w * 0.28f, 1.85f, 7.42f), new Vector3(0.18f, 0.18f, 0.12f), Palette.Hex("69F0AE"), 0.7f, PrimitiveType.Cylinder);
             MeshFactory.Solid("LightOff", parent, new Vector3(w * 0.12f, 1.85f, 7.42f), new Vector3(0.18f, 0.18f, 0.12f), Palette.Hex("EF9A9A"), 0.55f, PrimitiveType.Cylinder);
             MeshFactory.Block("Panel", parent, new Vector3(-w * 0.22f, 1.55f, 7.4f), new Vector3(0.55f, 0.7f, 0.08f), Palette.Hex("455A64"), 0.3f);
