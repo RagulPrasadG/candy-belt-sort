@@ -106,6 +106,38 @@ namespace CandyBeltSort
         public static Texture2D MarbleTex() => Tex("marble", DrawMarble);
         public static Texture2D MetalTex() => Tex("brushed_metal", DrawMetal);
 
+        static Sprite _buttonSkin;
+        static bool _buttonSkinTried;
+
+        // A 9-sliced glossy button skin (tintable, neutral) or null when the PNG is absent.
+        public static Sprite ButtonSkin()
+        {
+            if (_buttonSkinTried) return _buttonSkin;
+            _buttonSkinTried = true;
+            var tex = LoadPng("ui_button");
+            if (tex == null) { _buttonSkin = null; return _buttonSkin; }
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            float b = Mathf.Min(tex.width, tex.height) * 0.33f;
+            var border = new Vector4(b, b, b, b);
+            _buttonSkin = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                new Vector2(0.5f, 0.5f), tex.width * 0.95f, 0, SpriteMeshType.FullRect, border);
+            return _buttonSkin;
+        }
+
+        // Returns a sprite from a bundled PNG, or null when the art has not been added yet
+        // (so UI can gracefully fall back to a flat colour instead of a candy blob).
+        public static Sprite TryNamed(string key, bool punch = false)
+        {
+            if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;
+            var tex = LoadPng(key);
+            if (tex == null) return null;
+            if (punch) PunchBackdrop(tex);
+            var sprite = FromTex(tex, tex.width * 0.95f);
+            Cache[key] = sprite;
+            return sprite;
+        }
+
         public static Sprite Named(string key)
         {
             if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;

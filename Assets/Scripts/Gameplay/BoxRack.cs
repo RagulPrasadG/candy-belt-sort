@@ -45,6 +45,15 @@ namespace CandyBeltSort
             Layout();
         }
 
+        public bool HasEmptySlot()
+        {
+            for (int i = 0; i < _slots.Count; i++)
+            {
+                if (_slots[i] != null && _slots[i].IsEmptySlot) return true;
+            }
+            return false;
+        }
+
         public SortBox TryMatching(CandyColor color)
         {
             for (int i = 0; i < _slots.Count; i++)
@@ -90,18 +99,21 @@ namespace CandyBeltSort
             if (index >= 0)
                 _slots[index] = null;
 
-            var arena = GetComponentInParent<FactoryArena>();
             var from = box.transform.position;
-            var dock = arena != null ? arena.ShipDock : from + new Vector3(6.5f, 0.8f, -0.5f);
+            // Lift the packed crate straight up (and a touch back) so it rises out of frame
+            // instead of sliding sideways through the counters and props.
+            var lift = from + new Vector3(0f, 3.4f, 0.5f);
             var startScale = box.transform.localScale;
             float elapsed = 0f;
-            const float shipDuration = 0.62f;
+            const float shipDuration = 0.6f;
             while (elapsed < shipDuration && box != null)
             {
                 elapsed += Time.deltaTime;
                 float u = Mathf.SmoothStep(0f, 1f, elapsed / shipDuration);
-                box.transform.position = Vector3.Lerp(from, dock, u);
-                box.transform.localScale = Vector3.Lerp(startScale, startScale * 0.45f, u);
+                box.transform.position = Vector3.Lerp(from, lift, u);
+                // Gentle spin as it ascends, and shrink so it reads as being whisked away.
+                box.transform.Rotate(0f, Time.deltaTime * 220f, 0f, Space.World);
+                box.transform.localScale = Vector3.Lerp(startScale, startScale * 0.4f, u);
                 yield return null;
             }
 
