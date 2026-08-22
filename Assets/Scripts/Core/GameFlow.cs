@@ -10,6 +10,7 @@ namespace CandyBeltSort
     {
         public static GameFlow I { get; private set; }
 
+        MainMenuView _menu;
         WorldMapView _map;
         HudView _hud;
         ResultView _result;
@@ -24,23 +25,26 @@ namespace CandyBeltSort
             UiKit.Init();
             Sfx.Init(transform);
 
+            _menu = gameObject.AddComponent<MainMenuView>();
             _map = gameObject.AddComponent<WorldMapView>();
             _hud = gameObject.AddComponent<HudView>();
             _result = gameObject.AddComponent<ResultView>();
             _settings = gameObject.AddComponent<SettingsView>();
             _gameplay = gameObject.AddComponent<GameplayController>();
 
+            _menu.Build(transform);
             _map.Build(transform);
             _hud.Build(transform);
             _result.Build(transform);
             _settings.Build(transform);
 
-            ShowMap();
+            ShowMainMenu();
         }
 
         public void PlayLevel(int index)
         {
             _currentLevel = index;
+            _menu.Hide();
             _map.Hide();
             _result.Hide();
             _settings.Hide();
@@ -95,14 +99,26 @@ namespace CandyBeltSort
         {
             _gameplay.StopLevel();
             _result.Hide();
-            ShowMap();
+            ShowLevels();
         }
 
-        void ShowMap()
+        public void ShowMainMenu()
         {
             _hud.Hide();
+            _map.Hide();
+            _result.Hide();
+            _settings.Hide();
+            _menu.Show();
+        }
+
+        public void ShowLevels()
+        {
+            _hud.Hide();
+            _menu.Hide();
             _map.Show();
         }
+
+        void ShowMap() => ShowLevels();
 
         static void EnsureEventSystem()
         {

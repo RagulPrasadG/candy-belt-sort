@@ -106,6 +106,19 @@ namespace CandyBeltSort
         public static Texture2D MarbleTex() => Tex("marble", DrawMarble);
         public static Texture2D MetalTex() => Tex("brushed_metal", DrawMetal);
 
+        // Returns a sprite from a bundled PNG, or null when the art has not been added yet
+        // (so UI can gracefully fall back to a flat colour instead of a candy blob).
+        public static Sprite TryNamed(string key, bool punch = false)
+        {
+            if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;
+            var tex = LoadPng(key);
+            if (tex == null) return null;
+            if (punch) PunchBackdrop(tex);
+            var sprite = FromTex(tex, tex.width * 0.95f);
+            Cache[key] = sprite;
+            return sprite;
+        }
+
         public static Sprite Named(string key)
         {
             if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;

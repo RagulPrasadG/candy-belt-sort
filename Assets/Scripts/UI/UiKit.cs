@@ -66,11 +66,45 @@ namespace CandyBeltSort
         public static Button Button(Transform parent, string name, string text, Color bg, UnityAction click, Vector2 anchorMin, Vector2 anchorMax)
         {
             var image = Panel(parent, name, anchorMin, anchorMax, bg);
+            var sprite = SpriteFactory.TryNamed("ui_button");
+            bool hasSprite = sprite != null && sprite.texture != null && sprite.texture.width > 8;
+            if (hasSprite)
+            {
+                image.sprite = sprite;
+                image.type = Image.Type.Sliced;
+                image.color = bg;
+                image.pixelsPerUnitMultiplier = 1f;
+            }
             var button = image.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
             button.onClick.AddListener(click);
-            Label(image.transform, "Label", text, 42, Color.white);
+            var colors = button.colors;
+            colors.highlightedColor = new Color(1f, 1f, 1f, 1f);
+            colors.pressedColor = new Color(0.85f, 0.85f, 0.85f, 1f);
+            button.colors = colors;
+            var label = Label(image.transform, "Label", text, 42, Color.white);
+            label.fontStyle = FontStyle.Bold;
+            AddShadow(label);
             return button;
+        }
+
+        public static Image SpriteImage(Transform parent, string name, Sprite sprite, Color color, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var image = Panel(parent, name, anchorMin, anchorMax, color);
+            if (sprite != null)
+            {
+                image.sprite = sprite;
+                image.preserveAspect = true;
+            }
+            return image;
+        }
+
+        static void AddShadow(Text label)
+        {
+            if (label == null) return;
+            var shadow = label.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.35f);
+            shadow.effectDistance = new Vector2(2f, -2f);
         }
 
         public static void SetText(Text label, string value)

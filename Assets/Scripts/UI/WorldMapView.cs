@@ -12,7 +12,7 @@ namespace CandyBeltSort
         Text _streak;
         readonly System.Collections.Generic.List<LevelDot> _dots = new System.Collections.Generic.List<LevelDot>();
 
-        const float CardHeight = 440f;
+        const float CardHeight = 560f;
         const float CardGap = 24f;
 
         struct LevelDot
@@ -30,24 +30,21 @@ namespace CandyBeltSort
             _canvas.sortingOrder = 20;
 
             UiKit.Panel(_canvas.transform, "Bg", Vector2.zero, Vector2.one, Palette.Hex("FFF3E8"));
-            var header = UiKit.Panel(_canvas.transform, "Header", new Vector2(0f, 0.88f), Vector2.one, Palette.Hex("FF6F91"));
-            UiKit.Label(header.transform, "Title", "Candy Belt Sort", 64, Color.white);
+            var header = UiKit.Panel(_canvas.transform, "Header", new Vector2(0f, 0.9f), Vector2.one, Palette.Hex("FF6F91"));
+            UiKit.Label(header.transform, "Title", "Select a Level", 54, Color.white);
 
-            _coins = UiKit.Label(_canvas.transform, "Coins", "Coins 0", 36, Palette.Ink, TextAnchor.MiddleLeft);
-            _coins.rectTransform.anchorMin = new Vector2(0.04f, 0.82f);
-            _coins.rectTransform.anchorMax = new Vector2(0.5f, 0.88f);
+            UiKit.Button(_canvas.transform, "Back", "Menu", Palette.Hex("8D6E63"), () => GameFlow.I.ShowMainMenu(),
+                new Vector2(0.03f, 0.915f), new Vector2(0.2f, 0.975f));
+            UiKit.Button(_canvas.transform, "Continue", "Continue", Palette.Good, PlayNext,
+                new Vector2(0.7f, 0.915f), new Vector2(0.97f, 0.975f));
 
-            _streak = UiKit.Label(_canvas.transform, "Streak", "Streak 1", 36, Palette.Ink, TextAnchor.MiddleRight);
-            _streak.rectTransform.anchorMin = new Vector2(0.5f, 0.82f);
-            _streak.rectTransform.anchorMax = new Vector2(0.96f, 0.88f);
+            _coins = UiKit.Label(_canvas.transform, "Coins", "Coins 0", 34, Palette.Ink, TextAnchor.MiddleLeft);
+            _coins.rectTransform.anchorMin = new Vector2(0.04f, 0.85f);
+            _coins.rectTransform.anchorMax = new Vector2(0.5f, 0.9f);
 
-            UiKit.Button(_canvas.transform, "Play", "PLAY", Palette.Good, PlayNext, new Vector2(0.08f, 0.70f), new Vector2(0.92f, 0.81f));
-
-            var how = UiKit.Label(_canvas.transform, "How", "Tap the glowing candy, or tap a box to send it.\nWrong empty box locks the wrong color.", 32, Palette.Ink, TextAnchor.MiddleCenter);
-            how.rectTransform.anchorMin = new Vector2(0.06f, 0.60f);
-            how.rectTransform.anchorMax = new Vector2(0.94f, 0.70f);
-
-            UiKit.Button(_canvas.transform, "Settings", "Settings", Palette.Hex("8D6E63"), () => SettingsView.I.Show(), new Vector2(0.7f, 0.015f), new Vector2(0.97f, 0.07f));
+            _streak = UiKit.Label(_canvas.transform, "Streak", "Streak 1", 34, Palette.Ink, TextAnchor.MiddleRight);
+            _streak.rectTransform.anchorMin = new Vector2(0.5f, 0.85f);
+            _streak.rectTransform.anchorMax = new Vector2(0.96f, 0.9f);
 
             BuildLevelScroll();
         }
@@ -57,8 +54,8 @@ namespace CandyBeltSort
             var scrollGo = new GameObject("Scroll");
             scrollGo.transform.SetParent(_canvas.transform, false);
             var scrollRt = scrollGo.AddComponent<RectTransform>();
-            scrollRt.anchorMin = new Vector2(0.04f, 0.09f);
-            scrollRt.anchorMax = new Vector2(0.96f, 0.59f);
+            scrollRt.anchorMin = new Vector2(0.03f, 0.02f);
+            scrollRt.anchorMax = new Vector2(0.97f, 0.84f);
             scrollRt.offsetMin = Vector2.zero;
             scrollRt.offsetMax = Vector2.zero;
 
@@ -127,25 +124,46 @@ namespace CandyBeltSort
             rt.pivot = new Vector2(0.5f, 1f);
             rt.sizeDelta = new Vector2(0f, CardHeight);
             rt.anchoredPosition = new Vector2(0f, -16f - worldIndex * (CardHeight + CardGap));
-            card.GetComponent<Image>().color = Color.Lerp(world.Accent, Color.white, 0.45f);
 
-            var title = UiKit.Label(card.transform, "Name", world.Name, 48, Palette.Ink, TextAnchor.UpperLeft);
-            title.rectTransform.anchorMin = new Vector2(0.04f, 0.78f);
-            title.rectTransform.anchorMax = new Vector2(0.96f, 0.96f);
+            var cardImage = card.GetComponent<Image>();
+            var themeBg = SpriteFactory.TryNamed("bg_" + world.Theme);
+            if (themeBg != null)
+            {
+                cardImage.sprite = themeBg;
+                cardImage.type = Image.Type.Simple;
+                cardImage.preserveAspect = false;
+                cardImage.color = Color.white;
+                // Legibility scrim so labels/buttons read over the art.
+                UiKit.Panel(card.transform, "Scrim", Vector2.zero, Vector2.one, new Color(1f, 1f, 1f, 0.12f));
+            }
+            else
+            {
+                cardImage.color = Color.Lerp(world.Accent, Color.white, 0.45f);
+            }
 
-            var tag = UiKit.Label(card.transform, "Tag", world.Tagline, 28, Palette.Ink, TextAnchor.UpperLeft);
-            tag.rectTransform.anchorMin = new Vector2(0.04f, 0.64f);
-            tag.rectTransform.anchorMax = new Vector2(0.96f, 0.78f);
+            var titleBand = UiKit.Panel(card.transform, "TitleBand", new Vector2(0f, 0.82f), new Vector2(1f, 1f),
+                new Color(world.Accent.r, world.Accent.g, world.Accent.b, 0.85f));
 
+            var title = UiKit.Label(titleBand.transform, "Name", $"World {worldIndex + 1} — {world.Name}", 40, Color.white, TextAnchor.MiddleLeft);
+            title.rectTransform.anchorMin = new Vector2(0.04f, 0.45f);
+            title.rectTransform.anchorMax = new Vector2(0.96f, 0.95f);
+            title.fontStyle = FontStyle.Bold;
+
+            var tag = UiKit.Label(titleBand.transform, "Tag", world.Tagline, 26, Palette.Paper, TextAnchor.MiddleLeft);
+            tag.rectTransform.anchorMin = new Vector2(0.04f, 0.05f);
+            tag.rectTransform.anchorMax = new Vector2(0.96f, 0.5f);
+
+            const int cols = 5;
             for (int i = 0; i < WorldCatalog.LevelsPerWorld; i++)
             {
                 int levelIndex = worldIndex * WorldCatalog.LevelsPerWorld + i;
-                int col = i % 6;
-                int row = i / 6;
-                float x0 = 0.04f + col * 0.16f;
-                float y1 = 0.56f - row * 0.26f;
+                int col = i % cols;
+                int row = i / cols;
+                float x0 = 0.06f + col * 0.176f;
+                float yTop = 0.7f - row * 0.165f;
                 int captured = levelIndex;
-                var btn = UiKit.Button(card.transform, $"L{i}", (i + 1).ToString(), world.Accent, () => TryPlay(captured), new Vector2(x0, y1 - 0.22f), new Vector2(x0 + 0.14f, y1));
+                var btn = UiKit.Button(card.transform, $"L{i}", (i + 1).ToString(), world.Accent, () => TryPlay(captured),
+                    new Vector2(x0, yTop - 0.13f), new Vector2(x0 + 0.14f, yTop));
                 var image = btn.GetComponent<Image>();
                 _dots.Add(new LevelDot { Button = btn, Image = image, Index = levelIndex, Accent = world.Accent });
             }
