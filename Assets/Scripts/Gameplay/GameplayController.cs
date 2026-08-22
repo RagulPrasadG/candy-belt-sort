@@ -11,10 +11,12 @@ namespace CandyBeltSort
 
         FactoryArena _arena;
         TapInput _input;
-        readonly List<CandyColor> _boxQueue = new List<CandyColor>();
         readonly List<SpawnSpec> _spawns = new List<SpawnSpec>();
+        readonly List<SpawnSpec>[] _laneQueues = { new List<SpawnSpec>(), new List<SpawnSpec>() };
+        readonly int[] _laneSpawnAt = new int[2];
         readonly Stack<UndoRecord> _undos = new Stack<UndoRecord>();
-        int _spawnIndex;
+        CandyItem _selected;
+        int _nextLane;
         float _spawnTimer;
         int _freeUndos = 2;
         bool _extraSlotUsed;
@@ -24,6 +26,7 @@ namespace CandyBeltSort
         {
             public SpawnSpec Spec;
             public float Distance;
+            public int Lane;
         }
 
         public void EnsureArena()
@@ -39,8 +42,10 @@ namespace CandyBeltSort
             {
                 _input = gameObject.GetComponent<TapInput>();
                 if (_input == null) _input = gameObject.AddComponent<TapInput>();
-                _input.OnCandyTapped = HandleTap;
             }
+
+            _input.OnCandyTapped = HandleTap;
+            _input.OnBoxTapped = HandleBoxTap;
         }
 
         public void StartLevel(int index)
@@ -49,13 +54,16 @@ namespace CandyBeltSort
             _arena.gameObject.SetActive(true);
             Level = LevelCatalog.Get(index);
             var world = WorldCatalog.Get(Level.WorldIndex);
-            _arena.Build(world);
-            _arena.Belt.Setup(Level);
-            LevelSequencer.Build(Level, _boxQueue, _spawns);
-            _arena.Rack.Build(Level, _boxQueue);
+            _arena.Build(world, Level.LaneCount);
+            foreach (var belt in _arena.Belts)
+                belt.Setup(Level);
+            LevelSequencer.Build(Level, _spawns);
+            SplitLaneQueues();
+            _arena.Rack.Build(Level);
             _input.SetCamera(_arena.Cam);
-            _spawnIndex = 0;
-            _spawnTimer = 0.35f;
+            _spawnTimer = 0.12f;
+            _nextLane = 0;
+            _selected = null;
             _freeUndos = index < 8 ? 3 : 2;
             _extraSlotUsed = false;
             _resolving = false;
@@ -84,21 +92,60 @@ namespace CandyBeltSort
             SpawnTick();
             ThawTick();
 
-            var fallen = _arena.Belt.CandyReachedEnd();
-            if (fallen != null)
-                StartCoroutine(FailRoutine(fallen));
+            if (_arena.Belts != null)
+            {
+                for (int i = 0; i < _arena.Belts.Length; i++)
+                {
+                    var fallen = _arena.Belts[i].CandyReachedEnd();
+                    if (fallen != null)
+                    {
+                        StartCoroutine(FailRoutine(fallen));
+                        break;
+                    }
+                }
+            }
+        }
+
+        void SplitLaneQueues()
+        {
+            for (int i = 0; i < _laneQueues.Length; i++)
+            {
+                _laneQueues[i].Clear();
+                _laneSpawnAt[i] = 0;
+            }
+
+            int lanes = Mathf.Max(1, Level.LaneCount);
+            for (int i = 0; i < _spawns.Count; i++)
+            {
+                int lane = Mathf.Clamp(_spawns[i].Lane, 0, lanes - 1);
+                _laneQueues[lane].Add(_spawns[i]);
+            }
         }
 
         void SpawnTick()
         {
-            if (_spawnIndex >= _spawns.Count) return;
-            if (_arena.Belt.SpawnBlocked()) return;
+            if (_arena.Belts == null) return;
             _spawnTimer -= Time.deltaTime;
             if (_spawnTimer > 0f) return;
-            _spawnTimer = Level.SpawnInterval;
-            var spec = _spawns[_spawnIndex++];
-            var candy = CreateCandy(spec);
-            _arena.Belt.Add(candy);
+
+            int lanes = _arena.Belts.Length;
+            for (int n = 0; n < lanes; n++)
+            {
+                int lane = (_nextLane + n) % lanes;
+                if (_laneSpawnAt[lane] >= _laneQueues[lane].Count) continue;
+                var belt = _arena.Belts[lane];
+                if (belt.SpawnBlocked()) continue;
+
+                var spec = _laneQueues[lane][_laneSpawnAt[lane]++];
+                var candy = CreateCandy(spec);
+                candy.Lane = lane;
+                belt.Add(candy);
+                var puffColor = spec.Bomb ? Palette.Bomb : Palette.Of(spec.Color);
+                SpawnPuff(candy.transform.position + new Vector3(0f, 0.2f, 0.15f), puffColor);
+                _nextLane = (lane + 1) % lanes;
+                _spawnTimer = Level.SpawnInterval;
+                return;
+            }
         }
 
         CandyItem CreateCandy(SpawnSpec spec)
@@ -107,21 +154,77 @@ namespace CandyBeltSort
             go.transform.SetParent(_arena.CandyRoot, false);
             var candy = go.AddComponent<CandyItem>();
             candy.Build(spec);
+            candy.Lane = spec.Lane;
             return candy;
         }
 
         void ThawTick()
         {
-            foreach (var candy in _arena.Belt.Candies)
+            if (_arena.Belts == null) return;
+            foreach (var belt in _arena.Belts)
             {
-                if (candy != null && candy.Frozen && candy.Distance > 1.6f)
-                    candy.Thaw();
+                foreach (var candy in belt.Candies)
+                {
+                    if (candy != null && candy.Frozen && candy.Distance > 1.6f)
+                        candy.Thaw();
+                }
             }
+        }
+
+        ConveyorBelt BeltOf(CandyItem candy)
+        {
+            if (candy == null || _arena.Belts == null) return null;
+            return _arena.BeltAt(candy.Lane);
+        }
+
+        bool IsFront(CandyItem candy)
+        {
+            var belt = BeltOf(candy);
+            return belt != null && belt.FrontCandy() == candy;
+        }
+
+        void SelectCandy(CandyItem candy)
+        {
+            if (_selected != null && _selected != candy)
+                _selected.SetSelected(false);
+            _selected = candy;
+            if (_selected != null)
+                _selected.SetSelected(true);
+        }
+
+        void ClearSelection()
+        {
+            if (_selected != null)
+                _selected.SetSelected(false);
+            _selected = null;
+        }
+
+        List<CandyItem> ReadyFronts(SortBox box)
+        {
+            var list = new List<CandyItem>(2);
+            if (_arena.Belts == null || box == null) return list;
+            for (int i = 0; i < _arena.Belts.Length; i++)
+            {
+                var front = _arena.Belts[i].FrontCandy();
+                if (front == null || front.Collecting) continue;
+                if (front.Bomb || front.Hidden || front.Frozen) continue;
+                if (box.CanAccept(front.Hue))
+                    list.Add(front);
+            }
+
+            return list;
         }
 
         void HandleTap(CandyItem candy)
         {
             if (!Playing || _resolving || candy == null || candy.Collecting) return;
+
+            if (!IsFront(candy))
+            {
+                Sfx.Reject();
+                StartCoroutine(Tweens.Shake(candy.transform, 0.06f, 0.12f));
+                return;
+            }
 
             if (candy.Bomb)
             {
@@ -144,25 +247,59 @@ namespace CandyBeltSort
                 return;
             }
 
-            var box = _arena.Rack.TryAccept(candy.Hue);
-            if (box == null)
+            var match = _arena.Rack.TryMatching(candy.Hue);
+            bool dual = Level != null && Level.LaneCount > 1;
+            if (!dual && match != null)
             {
-                Sfx.Reject();
-                StartCoroutine(Tweens.Shake(candy.transform, 0.1f, 0.2f));
+                StartCoroutine(Collect(candy, match));
                 return;
             }
 
-            StartCoroutine(Collect(candy, box));
+            if (_selected == candy && match != null)
+            {
+                StartCoroutine(Collect(candy, match));
+                return;
+            }
+
+            SelectCandy(candy);
+            Sfx.Tap();
+            Haptics.Light();
+        }
+
+        void HandleBoxTap(SortBox box)
+        {
+            if (!Playing || _resolving || box == null) return;
+
+            if (_selected != null && IsFront(_selected) && !_selected.Collecting
+                && !_selected.Bomb && !_selected.Hidden && !_selected.Frozen
+                && box.CanAccept(_selected.Hue))
+            {
+                StartCoroutine(Collect(_selected, box));
+                return;
+            }
+
+            var fits = ReadyFronts(box);
+            if (fits.Count == 1)
+            {
+                StartCoroutine(Collect(fits[0], box));
+                return;
+            }
+
+            Sfx.Reject();
+            StartCoroutine(Tweens.Shake(box.transform, 0.1f, 0.2f));
         }
 
         IEnumerator Collect(CandyItem candy, SortBox box)
         {
             candy.Collecting = true;
-            _arena.Belt.Remove(candy);
+            if (_selected == candy) ClearSelection();
+            var belt = BeltOf(candy);
+            if (belt != null) belt.Remove(candy);
             _undos.Push(new UndoRecord
             {
-                Spec = new SpawnSpec { Color = candy.Hue, Frozen = false, Hidden = false, Bomb = false },
-                Distance = Mathf.Max(0.4f, candy.Distance - 0.6f)
+                Spec = new SpawnSpec { Color = candy.Hue, Frozen = false, Hidden = false, Bomb = false, Lane = candy.Lane },
+                Distance = Mathf.Max(0.4f, candy.Distance - 0.6f),
+                Lane = candy.Lane
             });
 
             Sfx.Tap();
@@ -171,17 +308,17 @@ namespace CandyBeltSort
             var to = _arena.Rack.SlotWorld(box);
             yield return Tweens.Arc(candy.transform, from, to, 1.4f, 0.28f);
             if (candy == null || box == null) yield break;
+            var color = candy.Hue;
             Destroy(candy.gameObject);
-            box.AddOne();
+            box.AddOne(color);
             Sfx.Box();
-            StartCoroutine(Tweens.PunchScale(box.transform, 0.12f, 0.18f));
+            SpawnConfetti(to, Palette.Of(color));
             HudView.I.Refresh();
 
             if (box.IsFull)
             {
-                _arena.Rack.NotifyFilled(box);
                 Sfx.Seal();
-                SpawnPuff(to, Palette.Of(box.Hue));
+                yield return _arena.Rack.ShipFilled(box);
                 HudView.I.Refresh();
                 if (_arena.Rack.Completed >= Level.QuotaBoxes)
                 {
@@ -189,12 +326,18 @@ namespace CandyBeltSort
                     yield break;
                 }
             }
+            else
+            {
+                StartCoroutine(Tweens.PunchScale(box.transform, 0.12f, 0.18f));
+            }
         }
 
         IEnumerator DiscardBomb(CandyItem candy)
         {
             candy.Collecting = true;
-            _arena.Belt.Remove(candy);
+            if (_selected == candy) ClearSelection();
+            var belt = BeltOf(candy);
+            if (belt != null) belt.Remove(candy);
             Sfx.Bomb();
             Haptics.Light();
             var from = candy.transform.position;
@@ -216,7 +359,9 @@ namespace CandyBeltSort
         {
             _resolving = true;
             Playing = false;
-            _arena.Belt.Remove(fallen);
+            if (_selected == fallen) ClearSelection();
+            var belt = BeltOf(fallen);
+            if (belt != null) belt.Remove(fallen);
             Sfx.Fail();
             Haptics.Light();
             yield return Tweens.Shake(fallen.transform, 0.15f, 0.25f);
@@ -245,9 +390,10 @@ namespace CandyBeltSort
             if (_undos.Count == 0) return;
             var record = _undos.Pop();
             var candy = CreateCandy(record.Spec);
-            candy.Distance = record.Distance;
-            _arena.Belt.Add(candy);
-            candy.transform.position = _arena.Belt.PointAt(record.Distance);
+            candy.Lane = record.Lane;
+            var belt = _arena.BeltAt(record.Lane);
+            if (belt != null) belt.InsertAsFront(candy);
+            SelectCandy(candy);
             HudView.I.Refresh();
         }
 
@@ -278,30 +424,83 @@ namespace CandyBeltSort
 
         IEnumerator FreezeBelt(float seconds)
         {
-            _arena.Belt.Frozen = true;
+            if (_arena.Belts != null)
+            {
+                foreach (var belt in _arena.Belts)
+                    belt.Frozen = true;
+            }
+
             yield return new WaitForSeconds(seconds);
-            if (_arena != null) _arena.Belt.Frozen = false;
+            if (_arena != null && _arena.Belts != null)
+            {
+                foreach (var belt in _arena.Belts)
+                    belt.Frozen = false;
+            }
         }
 
         static void SpawnPuff(Vector3 pos, Color color)
         {
-            var go = new GameObject("Puff");
+            var go = new GameObject("SpawnPuff");
             go.transform.position = pos;
             var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             var main = ps.main;
-            main.startLifetime = 0.35f;
-            main.startSpeed = 1.6f;
-            main.startSize = 0.16f;
-            main.startColor = color;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.45f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.6f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.1f);
+            main.startColor = new ParticleSystem.MinMaxGradient(Color.white, color);
             main.maxParticles = 18;
             main.gravityModifier = 0.4f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
             var emission = ps.emission;
             emission.rateOverTime = 0f;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 14) });
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 12) });
             var shape = ps.shape;
-            shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.15f;
-            Destroy(go, 1.2f);
+            shape.shapeType = ParticleSystemShapeType.Hemisphere;
+            shape.radius = 0.12f;
+            ps.Play();
+            Object.Destroy(go, 1.1f);
+        }
+
+        static void SpawnConfetti(Vector3 pos, Color color)
+        {
+            var go = new GameObject("Confetti");
+            go.transform.position = pos + Vector3.up * 0.2f;
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            var main = ps.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(2.6f, 5.2f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
+            main.startColor = new ParticleSystem.MinMaxGradient(color, Color.Lerp(color, Color.white, 0.75f));
+            main.maxParticles = 56;
+            main.gravityModifier = 1.8f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 36) });
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 42f;
+            shape.radius = 0.14f;
+            shape.rotation = new Vector3(-90f, 0f, 0f);
+            var colorLife = ps.colorOverLifetime;
+            colorLife.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(color, 0.35f), new GradientColorKey(Color.Lerp(color, Palette.Lemon, 0.4f), 1f) },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.85f, 0.45f), new GradientAlphaKey(0f, 1f) });
+            colorLife.color = gradient;
+            var sizeLife = ps.sizeOverLifetime;
+            sizeLife.enabled = true;
+            sizeLife.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.15f));
+            ps.Play();
+            Destroy(go, 1.8f);
         }
     }
 }

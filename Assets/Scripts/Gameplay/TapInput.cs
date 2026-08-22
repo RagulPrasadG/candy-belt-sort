@@ -6,6 +6,7 @@ namespace CandyBeltSort
     public class TapInput : MonoBehaviour
     {
         public System.Action<CandyItem> OnCandyTapped;
+        public System.Action<SortBox> OnBoxTapped;
         Camera _cam;
 
         public void SetCamera(Camera cam) => _cam = cam;
@@ -20,7 +21,14 @@ namespace CandyBeltSort
             var ray = _cam.ScreenPointToRay(screen);
             if (!Physics.Raycast(ray, out var hit, 80f)) return;
             var candy = hit.collider.GetComponentInParent<CandyItem>();
-            if (candy != null) OnCandyTapped?.Invoke(candy);
+            if (candy != null)
+            {
+                OnCandyTapped?.Invoke(candy);
+                return;
+            }
+
+            var box = hit.collider.GetComponentInParent<SortBox>();
+            if (box != null) OnBoxTapped?.Invoke(box);
         }
 
         static bool PressedThisFrame(out Vector3 screen, out int pointerId)

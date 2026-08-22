@@ -9,79 +9,214 @@ namespace CandyBeltSort
         public bool Frozen;
         public bool Hidden;
         public bool Bomb;
+        public int Lane;
     }
 
     public static class LevelSequencer
     {
-        public static void Build(LevelDefinition level, List<CandyColor> boxQueue, List<SpawnSpec> candies)
+        public static void Build(LevelDefinition level, List<SpawnSpec> candies)
         {
-            boxQueue.Clear();
             candies.Clear();
-
             var rng = new System.Random(level.Seed);
             int palette = Mathf.Clamp(level.ColorCount, 2, 5);
+            int capacity = Mathf.Max(1, level.BoxCapacity);
+            int liveSlots = Mathf.Max(1, level.OpenSlots - Mathf.Min(1, level.LockedBoxCount));
 
+            var groups = new List<CandyColor>(level.QuotaBoxes);
             for (int i = 0; i < level.QuotaBoxes; i++)
+                groups.Add((CandyColor)(i % palette));
+
+            var need = new int[5];
+            foreach (var color in groups)
+                need[(int)color] += capacity;
+
+            var active = new Dictionary<CandyColor, int>();
+            bool fillOpenBoxFirst = level.Index == 0;
+            CandyColor? last = null;
+            int guard = level.QuotaBoxes * capacity * 4 + 8;
+            while (Remaining(need) > 0 && guard-- > 0)
             {
-                CandyColor color;
-                if (i < palette)
-                    color = (CandyColor)i;
+                var legal = new List<CandyColor>(5);
+                if (fillOpenBoxFirst)
+                {
+                    for (int c = 0; c < palette; c++)
+                    {
+                        if (need[c] <= 0) continue;
+                        var color = (CandyColor)c;
+                        if (active.ContainsKey(color))
+                            legal.Add(color);
+                    }
+                }
+                else if (active.Count < liveSlots)
+                {
+                    for (int c = 0; c < palette; c++)
+                    {
+                        if (need[c] <= 0) continue;
+                        var color = (CandyColor)c;
+                        if (!active.ContainsKey(color))
+                            legal.Add(color);
+                    }
+                }
+
+                if (legal.Count == 0)
+                {
+                    for (int c = 0; c < palette; c++)
+                    {
+                        if (need[c] <= 0) continue;
+                        var color = (CandyColor)c;
+                        if (active.ContainsKey(color) || active.Count < liveSlots)
+                            legal.Add(color);
+                    }
+                }
+
+                if (legal.Count == 0) break;
+                if (last.HasValue && legal.Count > 1 && legal.Contains(last.Value) && rng.NextDouble() < 0.65)
+                    legal.Remove(last.Value);
+
+                var pick = legal[rng.Next(legal.Count)];
+                last = pick;
+                candies.Add(new SpawnSpec { Color = pick });
+                need[(int)pick]--;
+
+                if (active.TryGetValue(pick, out int left))
+                {
+                    left--;
+                    if (left <= 0) active.Remove(pick);
+                    else active[pick] = left;
+                }
                 else
-                    color = (CandyColor)rng.Next(0, palette);
-
-                if (i >= level.OpenSlots)
-                {
-                    var recent = new HashSet<CandyColor>();
-                    for (int r = Mathf.Max(0, boxQueue.Count - (level.OpenSlots - 1)); r < boxQueue.Count; r++)
-                        recent.Add(boxQueue[r]);
-                    int guard = 0;
-                    while (recent.Count >= level.OpenSlots && recent.Contains(color) && guard++ < 12)
-                        color = (CandyColor)rng.Next(0, palette);
-                }
-
-                boxQueue.Add(color);
+                    active[pick] = capacity - 1;
             }
 
-            var raw = new List<SpawnSpec>(level.CandyNeeded);
-            foreach (var color in boxQueue)
+            foreach (var spec in candies)
             {
-                for (int n = 0; n < level.BoxCapacity; n++)
-                    raw.Add(new SpawnSpec { Color = color });
-            }
-
-            int window = Mathf.Clamp(level.OpenSlots * level.BoxCapacity + 2, 6, 12);
-            WindowShuffle(raw, window, rng);
-
-            foreach (var spec in raw)
-            {
-                if (!spec.Bomb && rng.NextDouble() < level.BombChance)
-                {
-                    spec.Bomb = true;
-                    spec.Frozen = false;
-                    spec.Hidden = false;
-                    continue;
-                }
-
                 if (rng.NextDouble() < level.FrozenChance)
                     spec.Frozen = true;
                 if (rng.NextDouble() < level.HiddenChance)
                     spec.Hidden = true;
             }
 
-            candies.AddRange(raw);
+            if (level.BombChance > 0f)
+            {
+                var withBombs = new List<SpawnSpec>(candies.Count + 8);
+                foreach (var spec in candies)
+                {
+                    withBombs.Add(spec);
+                    if (rng.NextDouble() < level.BombChance)
+                    {
+                        withBombs.Add(new SpawnSpec
+                        {
+                            Color = spec.Color,
+                            Bomb = true
+                        });
+                    }
+                }
+                candies.Clear();
+                candies.AddRange(withBombs);
+            }
+
+            DealLanes(level, candies);
         }
 
-        static void WindowShuffle(List<SpawnSpec> list, int window, System.Random rng)
+        static void DealLanes(LevelDefinition level, List<SpawnSpec> candies)
         {
-            for (int start = 0; start < list.Count; start += window / 2)
+            int lanes = Mathf.Max(1, level.LaneCount);
+            if (lanes <= 1)
             {
-                int end = Mathf.Min(list.Count, start + window);
-                for (int i = end - 1; i > start; i--)
+                for (int i = 0; i < candies.Count; i++)
+                    candies[i].Lane = 0;
+                return;
+            }
+
+            var counts = new int[lanes];
+            int prefer = 0;
+            for (int i = 0; i < candies.Count; i++)
+            {
+                int lane = prefer;
+                for (int l = 0; l < lanes; l++)
                 {
-                    int j = rng.Next(start, i + 1);
-                    (list[i], list[j]) = (list[j], list[i]);
+                    if (counts[l] < counts[lane])
+                        lane = l;
+                }
+
+                candies[i].Lane = lane;
+                counts[lane]++;
+                prefer = (prefer + 1) % lanes;
+            }
+        }
+
+        public static bool IsGreedySolvable(LevelDefinition level, List<SpawnSpec> candies)
+        {
+            int capacity = Mathf.Max(1, level.BoxCapacity);
+            int slots = Mathf.Max(1, level.OpenSlots);
+            var fill = new int[slots];
+            var hue = new CandyColor[slots];
+            var hasHue = new bool[slots];
+            var locked = new bool[slots];
+            int lockedLeft = level.LockedBoxCount;
+            if (lockedLeft > 0) locked[slots - 1] = true;
+            int completed = 0;
+
+            foreach (var spec in candies)
+            {
+                if (spec.Bomb) continue;
+
+                int dest = -1;
+                for (int i = 0; i < slots; i++)
+                {
+                    if (locked[i] || fill[i] >= capacity) continue;
+                    if (hasHue[i] && hue[i] == spec.Color)
+                    {
+                        dest = i;
+                        break;
+                    }
+                }
+
+                if (dest < 0)
+                {
+                    for (int i = 0; i < slots; i++)
+                    {
+                        if (locked[i] || fill[i] >= capacity || hasHue[i]) continue;
+                        dest = i;
+                        break;
+                    }
+                }
+
+                if (dest < 0) return false;
+
+                if (!hasHue[dest])
+                {
+                    hasHue[dest] = true;
+                    hue[dest] = spec.Color;
+                }
+
+                fill[dest]++;
+                if (fill[dest] >= capacity)
+                {
+                    completed++;
+                    fill[dest] = 0;
+                    hasHue[dest] = false;
+                    if (lockedLeft > 0)
+                    {
+                        for (int i = 0; i < slots; i++)
+                        {
+                            if (!locked[i]) continue;
+                            locked[i] = false;
+                            lockedLeft--;
+                            break;
+                        }
+                    }
                 }
             }
+
+            return completed >= level.QuotaBoxes;
+        }
+
+        static int Remaining(int[] need)
+        {
+            int n = 0;
+            for (int i = 0; i < need.Length; i++) n += need[i];
+            return n;
         }
     }
 }

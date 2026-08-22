@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 
 namespace CandyBeltSort
 {
@@ -10,7 +11,9 @@ namespace CandyBeltSort
         Canvas _canvas;
         Text _progress;
         Text _undo;
+        Text _hint;
         GameplayController _game;
+        Coroutine _hintHide;
 
         public void Build(Transform parent)
         {
@@ -31,20 +34,27 @@ namespace CandyBeltSort
             _undo.rectTransform.anchorMin = new Vector2(0.04f, 0.1f);
             _undo.rectTransform.anchorMax = new Vector2(0.6f, 0.15f);
 
-            var hint = UiKit.Label(_canvas.transform, "Hint", "Tap candy that matches a box", 34, Palette.Ink, TextAnchor.MiddleCenter);
-            hint.rectTransform.anchorMin = new Vector2(0.08f, 0.82f);
-            hint.rectTransform.anchorMax = new Vector2(0.92f, 0.89f);
+            _hint = UiKit.Label(_canvas.transform, "Hint", "", 32, Palette.Ink, TextAnchor.MiddleCenter);
+            _hint.rectTransform.anchorMin = new Vector2(0.06f, 0.80f);
+            _hint.rectTransform.anchorMax = new Vector2(0.94f, 0.89f);
         }
 
         public void Show(GameplayController game)
         {
             _game = game;
             _canvas.gameObject.SetActive(true);
+            if (_hintHide != null) StopCoroutine(_hintHide);
             Refresh();
+            ShowLevelHint();
         }
 
         public void Hide()
         {
+            if (_hintHide != null)
+            {
+                StopCoroutine(_hintHide);
+                _hintHide = null;
+            }
             if (_canvas != null) _canvas.gameObject.SetActive(false);
         }
 
@@ -54,6 +64,35 @@ namespace CandyBeltSort
             UiKit.SetText(_progress, $"{_game.BoxesDone}/{_game.Quota} boxes");
             string extra = _game.ExtraSlotUsed ? "Slot used" : "Watch ad: extra slot";
             UiKit.SetText(_undo, _game.FreeUndos > 0 ? $"Free undos: {_game.FreeUndos}" : extra);
+        }
+
+        void ShowLevelHint()
+        {
+            if (_hint == null) return;
+            int level = _game != null && _game.Level != null ? _game.Level.Index : -1;
+            if (level == 0)
+            {
+                _hint.gameObject.SetActive(true);
+                _hint.text = "Only the glowing candy.\nTap a box to lock its color.";
+                _hintHide = StartCoroutine(HideHintAfter(6.5f));
+            }
+            else if (level == 12)
+            {
+                _hint.gameObject.SetActive(true);
+                _hint.text = "Two belts. Pick a glowing candy, then a box.";
+                _hintHide = StartCoroutine(HideHintAfter(6.5f));
+            }
+            else
+            {
+                _hint.gameObject.SetActive(false);
+            }
+        }
+
+        IEnumerator HideHintAfter(float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            if (_hint != null) _hint.gameObject.SetActive(false);
+            _hintHide = null;
         }
     }
 }

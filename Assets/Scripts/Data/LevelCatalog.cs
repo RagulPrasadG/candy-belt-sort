@@ -25,6 +25,8 @@ namespace CandyBeltSort
                 8 => 5,
                 _ => 5
             };
+            if (world == 0 && inWorld >= 2)
+                colorCount = 3;
 
             int slots = world <= 4 ? 2 : 3;
             if (world == 0 && inWorld < 4)
@@ -35,11 +37,13 @@ namespace CandyBeltSort
             if (index == 1) quota = 4;
             quota = Mathf.Min(quota, 16);
 
-            float beltSpeed = 0.95f + world * 0.13f + inWorld * 0.025f;
-            if (index < 3) beltSpeed = 0.85f;
+            float beltSpeed;
+            if (index < 2) beltSpeed = 1.05f;
+            else beltSpeed = 1.45f + world * 0.16f + inWorld * 0.045f;
 
-            float spawnInterval = Mathf.Max(0.48f, 1.28f - world * 0.07f - inWorld * 0.018f);
-            if (index < 3) spawnInterval = 1.35f;
+            float spawnInterval;
+            if (index < 2) spawnInterval = 0.72f;
+            else spawnInterval = Mathf.Max(0.32f, 0.52f - world * 0.045f - inWorld * 0.012f);
 
             float frozen = world < 2 ? 0f : Mathf.Clamp01((world - 1) * 0.05f + inWorld * 0.006f);
             int locked = 0;
@@ -56,6 +60,7 @@ namespace CandyBeltSort
                 LevelInWorld = inWorld,
                 ColorCount = colorCount,
                 OpenSlots = slots,
+                LaneCount = world == 0 ? 1 : 2,
                 BoxCapacity = 3,
                 QuotaBoxes = quota,
                 BeltSpeed = beltSpeed,
@@ -70,7 +75,6 @@ namespace CandyBeltSort
 
         public static string ValidateAll()
         {
-            var boxes = new System.Collections.Generic.List<CandyColor>();
             var candies = new System.Collections.Generic.List<SpawnSpec>();
             int issues = 0;
             var sb = new System.Text.StringBuilder();
@@ -89,28 +93,40 @@ namespace CandyBeltSort
                     sb.AppendLine($"L{i}: open slots {level.OpenSlots}");
                 }
 
+                if (level.LaneCount < 1 || level.LaneCount > 2)
+                {
+                    issues++;
+                    sb.AppendLine($"L{i}: lanes {level.LaneCount}");
+                }
+
                 if (level.QuotaBoxes < 1 || level.BoxCapacity < 1)
                 {
                     issues++;
                     sb.AppendLine($"L{i}: quota/capacity invalid");
                 }
 
-                LevelSequencer.Build(level, boxes, candies);
-                if (boxes.Count != level.QuotaBoxes)
+                LevelSequencer.Build(level, candies);
+                int real = 0;
+                for (int c = 0; c < candies.Count; c++)
                 {
-                    issues++;
-                    sb.AppendLine($"L{i}: box queue {boxes.Count} != quota {level.QuotaBoxes}");
+                    if (!candies[c].Bomb) real++;
                 }
 
-                if (candies.Count != level.QuotaBoxes * level.BoxCapacity)
+                if (real != level.QuotaBoxes * level.BoxCapacity)
                 {
                     issues++;
-                    sb.AppendLine($"L{i}: candies {candies.Count} != {level.QuotaBoxes * level.BoxCapacity}");
+                    sb.AppendLine($"L{i}: candies {real} != {level.QuotaBoxes * level.BoxCapacity}");
+                }
+
+                if (!LevelSequencer.IsGreedySolvable(level, candies))
+                {
+                    issues++;
+                    sb.AppendLine($"L{i}: greedy play cannot finish");
                 }
             }
 
             return issues == 0
-                ? $"OK — {Count} levels, sequencer queues match quotas."
+                ? $"OK — {Count} levels, greedy-solvable front-queue sequences."
                 : $"{issues} issue(s)\n{sb}";
         }
     }

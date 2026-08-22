@@ -10,6 +10,7 @@ namespace CandyBeltSort
         public int LevelInWorld;
         public int ColorCount = 2;
         public int OpenSlots = 2;
+        public int LaneCount = 1;
         public int BoxCapacity = 3;
         public int QuotaBoxes = 6;
         public float BeltSpeed = 1.2f;

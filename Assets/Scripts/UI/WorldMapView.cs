@@ -43,7 +43,7 @@ namespace CandyBeltSort
 
             UiKit.Button(_canvas.transform, "Play", "PLAY", Palette.Good, PlayNext, new Vector2(0.08f, 0.70f), new Vector2(0.92f, 0.81f));
 
-            var how = UiKit.Label(_canvas.transform, "How", "Tap PLAY, then tap candy that matches a box.\nFill 3 to seal it. Don't let pieces fall off the belt.", 32, Palette.Ink, TextAnchor.MiddleCenter);
+            var how = UiKit.Label(_canvas.transform, "How", "Tap the glowing candy, or tap a box to send it.\nWrong empty box locks the wrong color.", 32, Palette.Ink, TextAnchor.MiddleCenter);
             how.rectTransform.anchorMin = new Vector2(0.06f, 0.60f);
             how.rectTransform.anchorMax = new Vector2(0.94f, 0.70f);
 

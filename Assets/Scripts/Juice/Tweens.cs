@@ -23,6 +23,7 @@ namespace CandyBeltSort
         public static IEnumerator Arc(Transform t, Vector3 from, Vector3 to, float height, float duration, Action done = null)
         {
             float elapsed = 0f;
+            var startScale = t != null ? t.localScale : Vector3.one;
             while (elapsed < duration && t != null)
             {
                 elapsed += Time.deltaTime;
@@ -31,7 +32,7 @@ namespace CandyBeltSort
                 var p = Vector3.Lerp(from, to, u);
                 p.y += Mathf.Sin(u * Mathf.PI) * height;
                 t.position = p;
-                t.localScale = Vector3.one * Mathf.Lerp(1f, 0.82f, u);
+                t.localScale = Vector3.Lerp(startScale, startScale * 0.82f, u);
                 yield return null;
             }
             if (t != null) t.position = to;

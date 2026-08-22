@@ -102,6 +102,7 @@ namespace CandyBeltSort
                 sb.Append($"\"levelInWorld\": {l.LevelInWorld + 1}, ");
                 sb.Append($"\"colors\": {l.ColorCount}, ");
                 sb.Append($"\"slots\": {l.OpenSlots}, ");
+                sb.Append($"\"lanes\": {l.LaneCount}, ");
                 sb.Append($"\"quota\": {l.QuotaBoxes}, ");
                 sb.Append($"\"speed\": {l.BeltSpeed.ToString("0.000")}, ");
                 sb.Append($"\"spawn\": {l.SpawnInterval.ToString("0.000")}, ");
