@@ -11,47 +11,40 @@ namespace CandyBeltSort
             index = Mathf.Clamp(index, 0, Count - 1);
             int world = index / WorldCatalog.LevelsPerWorld;
             int inWorld = index % WorldCatalog.LevelsPerWorld;
+            int perWorld = Mathf.Max(1, WorldCatalog.LevelsPerWorld);
 
-            int colorCount = world switch
-            {
-                0 => 2,
-                1 => 3,
-                2 => 3,
-                3 => 4,
-                4 => 4,
-                5 => 4,
-                6 => 4,
-                7 => 5,
-                8 => 5,
-                _ => 5
-            };
-            if (world == 0 && inWorld >= 2)
-                colorCount = 3;
+            // Global progress 0..1 across every level, plus a smooth per-world ramp.
+            float p = Count > 1 ? index / (float)(Count - 1) : 0f;
+            float wp = perWorld > 1 ? inWorld / (float)(perWorld - 1) : 0f;
 
-            int slots = world <= 4 ? 2 : 3;
-            if (world == 0 && inWorld < 4)
-                slots = 2;
+            // Colours ramp 2 -> 5 across the whole game; early worlds stay gentle.
+            int colorCount = Mathf.Clamp(2 + Mathf.RoundToInt(p * 3f), 2, 5);
+            if (world == 0) colorCount = inWorld < 2 ? 2 : 3;
+            else if (world == 1) colorCount = 3;
 
-            int quota = 4 + world * 2 + inWorld / 2;
+            // Open slots grow 2 -> 4 so late worlds juggle more crates.
+            int slots = Mathf.Clamp(2 + Mathf.FloorToInt(p * 2.99f), 2, 4);
+            if (world == 0) slots = 2;
+
+            // Boxes required per level ramp 3 -> 20 with a gentle in-world climb.
+            int quota = Mathf.Clamp(4 + Mathf.RoundToInt(p * 14f) + inWorld / 5, 3, 20);
             if (index == 0) quota = 3;
             if (index == 1) quota = 4;
-            quota = Mathf.Min(quota, 16);
 
-            float beltSpeed;
-            if (index < 2) beltSpeed = 1.05f;
-            else beltSpeed = 1.45f + world * 0.16f + inWorld * 0.045f;
+            // Belt speed and spawn cadence tighten the deeper you go.
+            float beltSpeed = index < 2 ? 1.05f : Mathf.Clamp(1.25f + p * 1.35f + wp * 0.35f, 1.1f, 2.85f);
+            float spawnInterval = index < 2 ? 0.78f : Mathf.Clamp(0.82f - p * 0.42f - wp * 0.08f, 0.32f, 0.9f);
 
-            float spawnInterval;
-            if (index < 2) spawnInterval = 0.72f;
-            else spawnInterval = Mathf.Max(0.32f, 0.52f - world * 0.045f - inWorld * 0.012f);
+            // Hazards unlock progressively and scale with depth.
+            float frozen = world < 2 ? 0f : Mathf.Clamp01((world - 2) * 0.02f + wp * 0.12f) * 0.6f;
+            float hidden = world < 4 ? 0f : Mathf.Clamp01((world - 4) * 0.015f + wp * 0.1f) * 0.55f;
+            float bomb = world < 6 ? 0f : Mathf.Clamp01(0.05f + (world - 6) * 0.008f + wp * 0.08f) * 0.7f;
 
-            float frozen = world < 2 ? 0f : Mathf.Clamp01((world - 1) * 0.05f + inWorld * 0.006f);
             int locked = 0;
-            if (world >= 3 && inWorld % 4 == 3) locked = 1;
-            if (world >= 7 && inWorld >= 8) locked = 1;
+            if (world >= 3 && (inWorld % 5) == 4) locked = 1;
+            if (world >= 9 && inWorld >= 12) locked = 1;
 
-            float hidden = world < 4 ? 0f : Mathf.Clamp01(0.06f + (world - 4) * 0.035f + inWorld * 0.004f);
-            float bomb = world < 6 ? 0f : Mathf.Clamp01(0.04f + (world - 6) * 0.025f);
+            int laneCount = world == 0 ? 1 : 2;
 
             return new LevelDefinition
             {
@@ -60,7 +53,7 @@ namespace CandyBeltSort
                 LevelInWorld = inWorld,
                 ColorCount = colorCount,
                 OpenSlots = slots,
-                LaneCount = world == 0 ? 1 : 2,
+                LaneCount = laneCount,
                 BoxCapacity = 3,
                 QuotaBoxes = quota,
                 BeltSpeed = beltSpeed,
@@ -78,10 +71,11 @@ namespace CandyBeltSort
             var candies = new System.Collections.Generic.List<SpawnSpec>();
             int issues = 0;
             var sb = new System.Text.StringBuilder();
-            if (Count != 120)
+            const int expected = 500;
+            if (Count != expected)
             {
                 issues++;
-                sb.AppendLine($"Expected 120 levels, got {Count}");
+                sb.AppendLine($"Expected {expected} levels, got {Count}");
             }
 
             for (int i = 0; i < Count; i++)

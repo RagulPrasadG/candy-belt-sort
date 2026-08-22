@@ -31,6 +31,7 @@ namespace CandyBeltSort
     public class WorldInfo
     {
         public int Index;
+        public string Theme;
         public string Name;
         public string Tagline;
         public Color Accent;

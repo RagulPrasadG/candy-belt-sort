@@ -7,7 +7,10 @@ namespace CandyBeltSort
         public const int NoInterstitialBeforeLevel = 3;
         public const float RewardedCooldownSeconds = 8f;
 
-        public static int InterstitialEvery(int levelIndex) => levelIndex < 20 ? 2 : 3;
+        // Show an interstitial after every third level completed (past the early tutorial levels).
+        public const int InterstitialEveryWins = 3;
+
+        public static int InterstitialEvery(int levelIndex) => InterstitialEveryWins;
 
         public static bool CanShowInterstitial(int completedLevelIndex, int winsSinceInterstitial, float secondsSinceRewarded, float secondsSinceInterstitial)
         {
