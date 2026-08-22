@@ -66,7 +66,7 @@ namespace CandyBeltSort
         public static Button Button(Transform parent, string name, string text, Color bg, UnityAction click, Vector2 anchorMin, Vector2 anchorMax)
         {
             var image = Panel(parent, name, anchorMin, anchorMax, bg);
-            var sprite = SpriteFactory.TryNamed("ui_button");
+            var sprite = SpriteFactory.ButtonSkin();
             bool hasSprite = sprite != null && sprite.texture != null && sprite.texture.width > 8;
             if (hasSprite)
             {
